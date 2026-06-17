@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CardioApp - Algoritmo de Disociación AV</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome para Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        poppins: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        clinical: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#0a4a7a',
+                            600: '#083d66',
+                            700: '#062f52',
+                            teal: '#20b2aa',
+                            accent: '#ef4444'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Tipografía y transiciones suaves */
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .step-transition {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Estilo de scrollbars finos */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col">
+
+    <!-- CABECERA PRINCIPAL -->
+    <header class="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 shadow-sm transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-clinical-500 text-white rounded-lg shadow-md flex items-center justify-center">
+                    <i class="fa-solid fa-heart-pulse text-xl animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="font-poppins font-bold text-lg sm:text-xl text-clinical-500 dark:text-white leading-tight">CardioApp</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Asistente de Disociación Aurículoventricular</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <!-- Selector de Tema (Claro / Oscuro) -->
+                <button id="themeToggle" class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Cambiar tema">
+                    <i class="fa-solid fa-moon dark:hidden text-lg"></i>
+                    <i class="fa-solid fa-sun hidden dark:inline text-lg"></i>
+                </button>
+                <button onclick="resetAll()" class="hidden sm:flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Reiniciar</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CUERPO PRINCIPAL -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- COLUMNA IZQUIERDA: ASISTENTE PASO A PASO (7 COLS) -->
+        <section class="lg:col-span-7 flex flex-col space-y-6">
+            
+            <!-- Barra de Progreso Visual -->
+            <div class="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-clinical-teal">Progreso de la Evaluación</span>
+                    <span id="progressText" class="text-xs font-medium text-slate-500 dark:text-slate-400">Paso 1 de 7</span>
+                </div>
+                <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div id="progressBar" class="bg-clinical-teal h-full w-1/7 transition-all duration-500 ease-out"></div>
+                </div>
+            </div>
+
+            <!-- CARD DINÁMICO DEL WIZARD -->
+            <div id="wizardCard" class="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-6 sm:p-8 relative overflow-hidden flex-grow flex flex-col justify-between transition-colors min-h-[450px]">
+                
+                <!-- Decoración superior -->
+                <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-clinical-500 to-clinical-teal"></div>
+
+                <!-- CONTENIDOS DE PASOS -->
+                <div class="flex-grow flex flex-col justify-center">
+                    
+                    <!-- PASO 0: Confirmación de Disociación AV -->
+                    <div id="step0" class="step-transition block">
+                        <div class="text-center space-y-4">
+                            <div class="inline-flex p-4 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full mb-2">
+                                <i class="fa-solid fa-triangle-exclamation text-3xl"></i>
+                            </div>
+                            <h2 class="font-poppins font-bold text-2xl text-slate-800 dark:text-white">Criterio de Entrada Obligatorio</h2>
+                            <p class="text-slate-600 dark:text-slate-300 max-w-md mx-auto">
+                                Para iniciar este algoritmo de diagnóstico diferencial, el paciente debe presentar signos confirmados de <strong>Disociación Aurículoventricular (AV)</strong>.
+                            </p>
+                            <div class="pt-6 flex flex-col sm:flex-row justify-center items-center gap-3">
+                                <button onclick="setDisociacion(true)" class="w-full sm:w-auto px-6 py-3 bg-clinical-500 hover:bg-clinical-600 text-white font-semibold rounded-xl shadow-md transition transform hover:-translate-y-0.5">
+                                    <i class="fa-solid fa-check mr-2"></i> Sí, tiene Disociación AV
+                                </button>
+                                <button onclick="showNoAVModal()" class="w-full sm:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-xl transition">
+                                    No presenta disociación
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 1: Morfología del QRS -->
+                    <div id="step1" class="step-transition hidden">
+                        <div class="space-y-6">
+                            <div class="text-center sm:text-left">
+                                <span class="text-xs font-bold text-clinical-teal uppercase tracking-widest">Paso 1</span>
+                                <h2 class="font-poppins font-bold text-2xl text-slate-800 dark:text-white mt-1">¿Cuál es la morfología del complejo QRS?</h2>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Determine el ancho del complejo QRS en el electrocardiograma del paciente.</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- QRS Angosto -->
+                                <button onclick="setQRS('narrow')" class="group p-5 bg-slate-50 hover:bg-clinical-50 dark:bg-slate-900/50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-left transition duration-300 flex flex-col justify-between">
+                                    <div class="flex items-center justify-between w-full mb-3">
+                                        <div class="p-2.5 bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 rounded-xl group-hover:scale-110 transition-transform">
+                                            <i class="fa-solid fa-wave-square text-lg"></i>
+                                        </div>
+                                        <span class="text-xs bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium px-2 py-0.5 rounded">&lt; 120 ms</span>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-poppins font-bold text-lg text-slate-800 dark:text-white group-hover:text-clinical-500 transition-colors">QRS Angosto</h3>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Conducción normal o de origen supraventricular.</p>
+                                    </div>
+                                </button>
+
+                                <!-- QRS Ancho -->
+                                <button onclick="setQRS('wide')" class="group p-5 bg-slate-50 hover:bg-clinical-50 dark:bg-slate-900/50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-left transition duration-300 flex flex-col justify-between">
+                                    <div class="flex items-center justify-between w-full mb-3">
+                                        <div class="p-2.5 bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 rounded-xl group-hover:scale-110 transition-transform">
+                                            <i class="fa-solid fa-arrows-left-right text-lg"></i>
+                                        </div>
+                                        <span class="text-xs bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium px-2 py-0.5 rounded">&ge; 120 ms</span>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-poppins font-bold text-lg text-slate-800 dark:text-white group-hover:text-clinical-500 transition-colors">QRS Ancho</h3>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Retraso en la conducción o activación ventricular ectópica.</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 1B: Verificación de QRS idéntico al sinusal -->
+                    <div id="stepSinusal" class="step-transition hidden">
+                        <div class="space-y-6">
+                            <div class="text-center sm:text-left">
+                                <span class="text-xs font-bold text-clinical-teal uppercase tracking-widest">Paso 1B</span>
+                                <h2 class="font-poppins font-bold text-2xl text-slate-800 dark:text-white mt-1">¿El QRS Ancho es idéntico al basal sinusal?</h2>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Verifique si el paciente presenta un bloqueo de rama previo conocido.</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- Sí, idéntico al sinusal -->
+                                <button onclick="setIdenticoSinusal(true)" class="group p-5 bg-slate-50 hover:bg-clinical-50 dark:bg-slate-900/50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-left transition duration-300 flex flex-col justify-between">
+                                    <div class="p-2.5 bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 rounded-xl mb-3 w-fit group-hover:scale-110 transition-transform">
+                                        <i class="fa-solid fa-copy text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-poppins font-bold text-lg text-slate-800 dark:text-white group-hover:text-clinical-500 transition-colors">Sí, es idéntico</h3>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Sugiere Bloqueo de Rama previo. El algoritmo continúa por la **ruta Nodal/Angosta**.</p>
+                                    </div>
+                                </button>
+
+                                <!-- No, es diferente -->
+                                <button onclick="setIdenticoSinusal(false)" class="group p-5 bg-slate-50 hover:bg-clinical-50 dark:bg-slate-900/50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-left transition duration-300 flex flex-col justify-between">
+                                    <div class="p-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl mb-3 w-fit group-hover:scale-110 transition-transform">
+                                        <i class="fa-solid fa-not-equal text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-poppins font-bold text-lg text-slate-800 dark:text-white group-hover:text-clinical-500 transition-colors">No, es diferente/nuevo</h3>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Sugiere origen ectópico ventricular. El algoritmo continúa por la **ruta Ventricular/Ancha**.</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 2: Relación AV -->
+                    <div id="step2" class="step-transition hidden">
+                        <div class="space-y-6">
+                            <div class="text-center sm:text-left">
+                                <span class="text-xs font-bold text-clinical-teal uppercase tracking-widest">Paso 2</span>
+                                <h2 class="font-poppins font-bold text-2xl text-slate-800 dark:text-white mt-1">¿Cuál es la relación Ventrículo-Atrial (V vs A)?</h2>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Compare la tasa de eventos o frecuencia ventricular (V) contra la auricular (A).</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- V < A -->
+                                <button onclick="setAVRelation('less')" class="group p-5 bg-slate-50 hover:bg-clinical-50 dark:bg-slate-900/50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-left transition duration-300 flex flex-col justify-between">
+                                    <div class="p-2.5 bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 rounded-xl mb-3 w-fit group-hover:scale-110 transition-transform">
+                                        <i class="fa-solid fa-arrow-down-short-wide text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-poppins font-bold text-lg text-slate-800 dark:text-white group-hover:text-clinical-500 transition-colors">V &lt; A</h3>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Frecuencia ventricular menor que la frecuencia auricular (Bloqueo AV).</p>
+                                    </div>
+                                </button>
+
+                                <!-- V >= A -->
+                                <button onclick="setAVRelation('greater_equal')" class="group p-5 bg-slate-50 hover:bg-clinical-50 dark:bg-slate-900/50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-left transition duration-300 flex flex-col justify-between">
+                                    <div class="p-2.5 bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 rounded-xl mb-3 w-fit group-hover:scale-110 transition-transform">
+                                        <i class="fa-solid fa-arrow-up-wide-short text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-poppins font-bold text-lg text-slate-800 dark:text-white group-hover:text-clinical-500 transition-colors">V &ge; A</h3>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Frecuencia ventricular igual o mayor que la auricular (Automatismo aumentado).</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 3: Tasa Fc/Pc (RANGO PURO SEPARADO) -->
+                    <div id="step3" class="step-transition hidden">
+                        <div class="space-y-5">
+                            <div class="text-center sm:text-left">
+                                <span class="text-xs font-bold text-clinical-teal uppercase tracking-widest">Paso 3</span>
+                                <h2 class="font-poppins font-bold text-2xl text-slate-800 dark:text-white mt-1">¿Cuál es el rango de la Tasa Fc/Pc?</h2>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Seleccione únicamente la relación porcentual evaluada en el paciente.</p>
+                            </div>
+
+                            <!-- Botones Puros de Porcentaje -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                                
+                                <!-- Opción < 3% -->
+                                <button onclick="setTasaRange('low')" class="group p-5 bg-slate-50 dark:bg-slate-900/40 hover:bg-clinical-50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-center transition duration-300 flex flex-col items-center justify-center space-y-2">
+                                    <div class="p-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl group-hover:scale-105 transition-transform">
+                                        <i class="fa-solid fa-gauge-simple text-xl"></i>
+                                    </div>
+                                    <span class="font-poppins font-bold text-2xl text-slate-800 dark:text-white block">&lt; 3%</span>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Escape / Fisiológico</span>
+                                </button>
+
+                                <!-- Opción 3% - 95% -->
+                                <button onclick="setTasaRange('mid')" class="group p-5 bg-slate-50 dark:bg-slate-900/40 hover:bg-clinical-50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-center transition duration-300 flex flex-col items-center justify-center space-y-2">
+                                    <div class="p-3 bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 rounded-xl group-hover:scale-105 transition-transform">
+                                        <i class="fa-solid fa-gauge text-xl"></i>
+                                    </div>
+                                    <span class="font-poppins font-bold text-2xl text-slate-800 dark:text-white block">3% - 95%</span>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Acelerado</span>
+                                </button>
+
+                                <!-- Opción > 95% -->
+                                <button onclick="setTasaRange('high')" class="group p-5 bg-slate-50 dark:bg-slate-900/40 hover:bg-clinical-50 dark:hover:bg-clinical-500/10 border-2 border-slate-200 dark:border-slate-800 hover:border-clinical-500 dark:hover:border-clinical-500 rounded-2xl text-center transition duration-300 flex flex-col items-center justify-center space-y-2">
+                                    <div class="p-3 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-xl group-hover:scale-105 transition-transform">
+                                        <i class="fa-solid fa-gauge-high text-xl"></i>
+                                    </div>
+                                    <span class="font-poppins font-bold text-2xl text-slate-800 dark:text-white block">&gt; 95%</span>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Taquicardia</span>
+                                </button>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 4: Confirmación del Diagnóstico sugerido según Tasa -->
+                    <div id="step4Confirm" class="step-transition hidden">
+                        <div class="space-y-6">
+                            <div class="text-center sm:text-left">
+                                <span class="text-xs font-bold text-clinical-teal uppercase tracking-widest">Paso 4</span>
+                                <h2 class="font-poppins font-bold text-2xl text-slate-800 dark:text-white mt-1">Diagnóstico Diferencial Sugerido</h2>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Basado en la morfología QRS y la tasa de automatismo ventricular.</p>
+                            </div>
+
+                            <!-- Tarjeta de Confirmación de Diagnóstico -->
+                            <div class="bg-slate-50 dark:bg-slate-900/40 p-1 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-800">
+                                <button onclick="confirmDiagnosis()" class="w-full text-left p-6 bg-white dark:bg-slate-950 hover:bg-clinical-50 dark:hover:bg-clinical-500/5 rounded-xl transition duration-300 border border-slate-100 dark:border-slate-900 shadow-md flex items-start space-x-4 group">
+                                    <div class="p-4 bg-clinical-500 text-white rounded-2xl group-hover:scale-105 transition-transform">
+                                        <i class="fa-solid fa-heart-pulse text-2xl"></i>
+                                    </div>
+                                    <div class="flex-grow">
+                                        <span class="text-xs font-bold text-clinical-teal uppercase tracking-wider block">Diagnóstico Asociado</span>
+                                        <h3 id="confirmDiagnosisTitle" class="font-poppins font-bold text-xl text-slate-800 dark:text-white mt-0.5">-</h3>
+                                        <p id="confirmDiagnosisDesc" class="text-xs text-slate-500 dark:text-slate-400 mt-2">-</p>
+                                        <div class="mt-4 inline-flex items-center space-x-1.5 text-xs font-bold text-clinical-500 group-hover:text-clinical-teal transition-colors">
+                                            <span>Confirmar y Ver Guía</span>
+                                            <i class="fa-solid fa-arrow-right"></i>
+                                        </div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 5: Resultados y Diagnóstico Final -->
+                    <div id="step4" class="step-transition hidden">
+                        <div class="space-y-6">
+                            <div class="text-center">
+                                <div class="inline-flex p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 rounded-full mb-1">
+                                    <i class="fa-solid fa-circle-check text-2xl"></i>
+                                </div>
+                                <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Evaluación Completada</span>
+                                <h2 class="font-poppins font-bold text-3xl text-slate-800 dark:text-white mt-1" id="resultName">-</h2>
+                            </div>
+
+                            <!-- Resumen de Parámetros -->
+                            <div class="grid grid-cols-3 gap-3 text-center bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                                <div>
+                                    <span class="text-[10px] uppercase font-bold text-slate-400 block">QRS</span>
+                                    <span id="summaryQRS" class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] uppercase font-bold text-slate-400 block">Relación V vs A</span>
+                                    <span id="summaryAV" class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">-</span>
+                                </div>
+                                <div id="summaryFcPcContainer">
+                                    <span class="text-[10px] uppercase font-bold text-slate-400 block">Tasa Fc/Pc</span>
+                                    <span id="summaryFcPc" class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">-</span>
+                                </div>
+                            </div>
+
+                            <!-- Botones de Acción Clínicos -->
+                            <div class="space-y-3">
+                                <button onclick="openGuideModal()" class="w-full py-3 bg-clinical-500 hover:bg-clinical-600 text-white font-semibold rounded-xl shadow-md transition flex items-center justify-center space-x-2">
+                                    <i class="fa-solid fa-book-medical"></i>
+                                    <span>Ver Guía Clínica Completa</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- CONTROLES DE RETROCESO / REINICIO (ZONA INFERIOR) -->
+                <div id="wizardControls" class="border-t border-slate-100 dark:border-slate-800 pt-4 mt-6 flex justify-between items-center">
+                    <button id="prevBtn" onclick="goBack()" class="px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition disabled:opacity-0 disabled:pointer-events-none">
+                        <i class="fa-solid fa-chevron-left mr-1"></i> Atrás
+                    </button>
+                    <button onclick="resetAll()" class="px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition flex items-center space-x-1">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>Reiniciar</span>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- COLUMNA DERECHA: INTERACTIVOS, ECG SIMULATOR Y FLOWCHART (5 COLS) -->
+        <section class="lg:col-span-5 flex flex-col space-y-6">
+
+            <!-- 1. MONITOR ECG DINÁMICO (CANVAS) -->
+            <div class="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md p-4 transition-colors flex flex-col">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-poppins font-bold text-sm text-slate-800 dark:text-white flex items-center space-x-2">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </span>
+                        <span>Monitor ECG Simulador</span>
+                    </h3>
+                    <span id="ecgLabel" class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">Desconectado</span>
+                </div>
+
+                <!-- Papel ECG Milimetrado (Canvas) -->
+                <div class="relative bg-rose-50/20 dark:bg-slate-900 border border-rose-100 dark:border-slate-800 rounded-xl overflow-hidden h-40">
+                    <canvas id="ecgCanvas" class="w-full h-full block"></canvas>
+                </div>
+
+                <div class="flex justify-between items-center text-[10px] text-slate-400 dark:text-slate-500 mt-2 px-1">
+                    <span>Frecuencia Atrial (Ondas P): ~75/min</span>
+                    <span id="ventRateLabel">Frecuencia Ventricular: -</span>
+                </div>
+            </div>
+
+            <!-- 2. DIAGRAMA DE FLUJO ACTIVO -->
+            <div class="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md p-5 transition-colors flex-grow flex flex-col">
+                <h3 class="font-poppins font-bold text-sm text-slate-800 dark:text-white mb-4 flex items-center space-x-2">
+                    <i class="fa-solid fa-diagram-project text-clinical-teal"></i>
+                    <span>Trazabilidad del Algoritmo</span>
+                </h3>
+                
+                <!-- Mapa de Árbol / Nodos del Algoritmo -->
+                <div class="flex-grow flex flex-col justify-between space-y-4 text-xs font-semibold">
+                    
+                    <!-- Raíz: Disociación -->
+                    <div id="nodeRoot" class="p-2 text-center rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-400 transition-all duration-300">
+                        DISOCIACIÓN AV
+                    </div>
+
+                    <!-- Bifurcación 1: QRS -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div id="nodeNarrow" class="p-2.5 text-center rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-400 transition-all duration-300">
+                            QRS Angosto
+                        </div>
+                        <div id="nodeWide" class="p-2.5 text-center rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-400 transition-all duration-300">
+                            QRS Ancho
+                        </div>
+                    </div>
+
+                    <!-- Bifurcación 2: Relación AV -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Subramas Angostas (O ancha idéntica a sinusal) -->
+                        <div class="space-y-2">
+                            <div id="nodeNarrowLess" class="p-2 text-center rounded-md border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900 text-[10px] text-slate-400 transition-all duration-300">
+                                V &lt; A
+                            </div>
+                            <div id="nodeNarrowGreater" class="p-2 text-center rounded-md border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900 text-[10px] text-slate-400 transition-all duration-300">
+                                V &ge; A (Fc/Pc)
+                            </div>
+                        </div>
+                        <!-- Subramas Anchas (O sinusal aberrante/ventricular) -->
+                        <div class="space-y-2">
+                            <div id="nodeWideLess" class="p-2 text-center rounded-md border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900 text-[10px] text-slate-400 transition-all duration-300">
+                                V &lt; A
+                            </div>
+                            <div id="nodeWideGreater" class="p-2 text-center rounded-md border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900 text-[10px] text-slate-400 transition-all duration-300">
+                                V &ge; A (Fc/Pc)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Nodos Terminales de Categoría -->
+                    <div class="grid grid-cols-2 gap-2 text-[9px] text-center text-slate-400 font-bold">
+                        <div id="terminalNodal" class="p-2 rounded bg-slate-100/50 dark:bg-slate-900/30 transition-all duration-300">
+                            ESCAPES / RITMO NODAL / JET
+                        </div>
+                        <div id="terminalVent" class="p-2 rounded bg-slate-100/50 dark:bg-slate-900/30 transition-all duration-300">
+                            ESCAPES / RIVA / TV
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- MODAL DE ADVERTENCIA (Sin Disociación AV) -->
+    <div id="noAVModal" class="fixed inset-0 z-50 hidden bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 max-w-sm w-full shadow-2xl text-center space-y-4">
+            <div class="inline-flex p-3.5 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-500 rounded-full">
+                <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+            </div>
+            <h3 class="font-poppins font-bold text-lg text-slate-800 dark:text-white">Algoritmo No Aplicable</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Este flujo de toma de decisiones está diseñado exclusivamente para pacientes con sospecha o confirmación diagnóstica de <strong>Disociación AV</strong>. Evalúe otros algoritmos electrocardiográficos.
+            </p>
+            <button onclick="closeNoAVModal()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-semibold transition">
+                Cerrar e Investigar
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL DE GUÍA CLÍNICA COMPLETA -->
+    <div id="guideModal" class="fixed inset-0 z-50 hidden bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-lg w-full shadow-2xl transition-all flex flex-col max-h-[85vh]">
+            
+            <!-- Cabecera del Modal -->
+            <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-clinical-500/10 text-clinical-500 rounded-lg">
+                        <i class="fa-solid fa-book-medical"></i>
+                    </div>
+                    <div>
+                        <h3 id="modalDiagnosisTitle" class="font-poppins font-bold text-slate-800 dark:text-white">Cargando Guía Clínica...</h3>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Guía de Procedimiento Médico</p>
+                    </div>
+                </div>
+                <button onclick="closeGuideModal()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Contenido Clínico -->
+            <div class="p-6 overflow-y-auto space-y-4 text-sm text-slate-600 dark:text-slate-300">
+                <div class="space-y-1">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-clinical-teal">Definición General</h4>
+                    <p id="modalDiagnosisDef">-</p>
+                </div>
+                
+                <div class="space-y-1.5">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-clinical-teal">Criterios Electrocardiográficos</h4>
+                    <ul id="modalDiagnosisECG" class="list-disc pl-5 space-y-1">
+                        <!-- Generado dinámicamente -->
+                    </ul>
+                </div>
+
+                <div class="space-y-1.5">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-clinical-teal">Abordaje y Conducta Recomendada</h4>
+                    <p id="modalDiagnosisAction">-</p>
+                </div>
+            </div>
+
+            <!-- Pie del Modal -->
+            <div class="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+                <button onclick="closeGuideModal()" class="px-5 py-2 bg-clinical-500 hover:bg-clinical-600 text-white text-xs font-semibold rounded-lg shadow transition">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PIE DE PÁGINA -->
+    <footer class="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 py-4 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 dark:text-slate-500 space-y-1">
+            <p>Diseño y especificaciones basados en guías clínicas estándar de electrofisiología cardiaca.</p>
+            <p>&copy; 2026 CardioApp Inc. Solo para uso informativo y académico de profesionales de la salud.</p>
+        </div>
+    </footer>
+
+    <!-- LÓGICA DE CONTROL JAVASCRIPT -->
+    <script>
+        // --- 1. CONFIGURACIÓN DE TEMA ---
+        const themeToggle = document.getElementById('themeToggle');
+        
+        // Carga de estado inicial de tema
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        themeToggle.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('color-theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('color-theme', 'dark');
+            }
+        });
+
+        // --- 2. BASE DE CONOCIMIENTO (MEDICINA) ---
+        const DIAGNOSTICOS = {
+            'BAVC_ESC_NODAL': {
+                titulo: 'BAVC con Escape Nodal',
+                def: 'Bloqueo Aurículoventricular Completo (3er grado) caracterizado por la interrupción total de la conducción de la aurícula al ventrículo. El ritmo es mantenido por un escape nodal (unión AV) que habitualmente es de comportamiento estable.',
+                ecg: [
+                    'Disociación completa entre ondas P y complejos QRS.',
+                    'Frecuencia ventricular regular (usualmente entre 40 y 60 lpm).',
+                    'Complejos QRS angostos (< 120 ms).',
+                    'Intervalo P-P e intervalo R-R constantes pero sin relación mutua.'
+                ],
+                conducta: 'Monitorear hemodinamia. Evaluar la necesidad de marcapasos temporal o definitivo si hay síntomas de bajo gasto o inestabilidad hemodinámica.'
+            },
+            'BAVC_ESC_VENT': {
+                titulo: 'BAVC con Escape Ventricular',
+                def: 'Bloqueo Aurículoventricular Completo donde el marcapasos subsidiario se localiza en los ventrículos (infranodal). El ritmo suele ser sumamente inestable y marcadamente bradicárdico.',
+                ecg: [
+                    'Disociación AV completa.',
+                    'Frecuencia ventricular baja e inestable (habitualmente < 40 lpm).',
+                    'Complejos QRS anchos (≥ 120 ms) con morfología aberrante.',
+                    'Ondas P de origen sinusal que marchan independientemente de los QRS.'
+                ],
+                conducta: 'Requiere intervención inmediata. Preparar marcapasos transcutáneo de urgencia. Evitar fármacos depresores de la conducción infranodal.'
+            },
+            'BS_ESC_NODAL': {
+                titulo: 'BS con Escape Nodal',
+                def: 'Bloqueo Sinusal (o pausa/paro sinusal prolongado) donde, ante la ausencia de estímulos provenientes de la aurícula, el nodo AV asume la función de marcapasos del corazón de forma transitoria.',
+                ecg: [
+                    'Pausas sinusales o bradicardia sinusal extrema (< 3% de relación de tasa cardíaca).',
+                    'Complejo QRS de escape con morfología angosta (< 120 ms).',
+                    'Aparición tardía del complejo QRS tras una pausa de longitud significativa.'
+                ],
+                conducta: 'Investigar causas reversibles (isquemia, fármacos como beta-bloqueantes, calcioantagonistas o trastornos electrolíticos severos).'
+            },
+            'RITMO_NODAL_ACE': {
+                titulo: 'Ritmo Nodal Acelerado',
+                def: 'Ritmo activo originado en el nodo AV con un aumento de su automatismo intrínseco, superando la frecuencia sinusal nativa pero sin llegar a rangos de taquicardia franca (tasa del 3% al 95%).',
+                ecg: [
+                    'QRS angosto de morfología idéntica a la conducción basal normal.',
+                    'Ausencia de ondas P precediendo al QRS o presencia de ondas P retrógradas.',
+                    'Frecuencia cardíaca generalmente establecida entre 60 y 100 lpm.'
+                ],
+                conducta: 'Monitorear estrechamente. Comúnmente autolimitado; se asocia a toxicidad digitálica, isquemia miocárdica aguda o post-cirugía cardiaca.'
+            },
+            'JET': {
+                titulo: 'Taquicardia Ectópica de la Unión (JET)',
+                def: 'Arritmia infrecuente pero potencialmente grave caracterizada por un foco de descarga rápida originado de forma ectópica en el nodo AV o el haz de His (tasa > 95%).',
+                ecg: [
+                    'Taquicardia de QRS angosto con disociación AV evidente.',
+                    'Frecuencia ventricular típicamente superior a 120-150 lpm.',
+                    'La frecuencia ventricular supera a la auricular, con ondas P disociadas.'
+                ],
+                conducta: 'Requiere control de la frecuencia de manera urgente. En pediatría post-quirúrgica, puede requerir hipotermia inducida, optimización de electrolitos y amiodarona.'
+            },
+            'BS_ESC_VENT': {
+                titulo: 'BS con Escape Ventricular',
+                def: 'Falla o Bloqueo Sinusal severo donde el marcapasos de rescate se activa de manera exclusiva a nivel ventricular debido a la falta de respuesta secundaria de la unión AV.',
+                ecg: [
+                    'Pausas sinusales prolongadas acompañadas de latidos de escape anchos.',
+                    'QRS de escape ≥ 120 ms con ondas T opuestas al vector principal del complejo.',
+                    'Frecuencia extremadamente baja durante las pausas sinusales.'
+                ],
+                conducta: 'Evaluar implantación de marcapasos permanente si se documenta disfunción intrínseca sintomática del nodo sinusal.'
+            },
+            'RIVA': {
+                titulo: 'Ritmo Idioventricular Acelerado (RIVA)',
+                def: 'Ritmo ventricular activo que ocurre cuando el automatismo de las fibras de Purkinje supera al del nodo sinusal de forma transitoria (tasa de 3% a 95%). Altamente frecuente en la fase de reperfusión de un infarto agudo de miocardio.',
+                ecg: [
+                    'Ritmo regular de complejos QRS anchos (≥ 120 ms).',
+                    'Frecuencia típicamente entre 55 y 110 lpm.',
+                    'Inicio y término gradual (automatismo caliente).',
+                    'Disociación AV con presencia frecuente de latidos de fusión y captura.'
+                ],
+                conducta: 'Generalmente benigno y autolimitado. No requiere tratamiento supresor con antiarrítmicos; asegurar estabilidad hemodinámica e investigar reperfusión miocárdica.'
+            },
+            'TV': {
+                titulo: 'Taquicardia Ventricular (TV)',
+                def: 'Taquicardia originada por debajo del haz de His con alta frecuencia (tasa > 95%). Se trata de una emergencia médica que puede degenerar en fibrilación ventricular.',
+                ecg: [
+                    'Sucesión de 3 o más latidos continuos de origen ventricular.',
+                    'QRS marcadamente ancho (≥ 120 ms) con aberrancia extrema.',
+                    'Frecuencias ventriculares habitualmente > 120 lpm.',
+                    'Disociación AV clara (un criterio clave de diagnóstico para diferenciar de TSV con aberrancia).'
+                ],
+                conducta: 'Si el paciente está inestable, realizar cardioversión eléctrica de forma inmediata. Si está estable, evaluar amiodarona endovenosa e identificar la etiología estructural.'
+            }
+        };
+
+        // --- 3. ESTADO GLOBAL DE LA APP ---
+        let appState = {
+            tieneDisociacionAV: null,
+            tipoQRS: null,          // 'narrow' o 'wide'
+            esIdenticoSinusal: null, // true o false (solo para QRS ancho)
+            relacionAV: null,        // 'less' o 'greater_equal'
+            tasaFcPc: 50,            // 1 (low), 50 (mid), 100 (high)
+            diagnosticoFinal: null,
+            currentStep: 0           // 0: step0, 1: step1, 2: stepSinusal, 3: step2, 4: step3, 5: step4Confirm, 6: step4 (Resultado final)
+        };
+
+        // Definición explícita de las pantallas/pasos
+        const steps = ['step0', 'step1', 'stepSinusal', 'step2', 'step3', 'step4Confirm', 'step4'];
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const prevBtn = document.getElementById('prevBtn');
+
+        // Canvas ECG
+        const canvas = document.getElementById('ecgCanvas');
+        const ctx = canvas.getContext('2d');
+        let ecgAnimationId;
+        let ecgOffset = 0;
+
+        // --- 4. CONTROL DEL WIZARD (PASOS EXPLICITOS) ---
+        function goToStep(stepIndex) {
+            appState.currentStep = stepIndex;
+            updateUI();
+        }
+
+        function updateUI() {
+            // Mostrar/Ocultar Pasos
+            steps.forEach((stepId, index) => {
+                const element = document.getElementById(stepId);
+                if (index === appState.currentStep) {
+                    element.classList.remove('hidden');
+                    element.classList.add('block');
+                } else {
+                    element.classList.remove('block');
+                    element.classList.add('hidden');
+                }
+            });
+
+            // Actualizar Progreso (Total de 7 pantallas: índice de 0 a 6)
+            const percentage = (appState.currentStep / (steps.length - 1)) * 100;
+            progressBar.style.width = `${Math.max(5, percentage)}%`;
+            progressText.innerText = `Paso ${appState.currentStep + 1} de ${steps.length}`;
+
+            // Estado de Botón Atrás
+            prevBtn.disabled = appState.currentStep === 0;
+
+            // Actualizar datos del paso 4 (Confirmación)
+            if (appState.currentStep === 5) {
+                updateStep4ConfirmCard();
+            }
+
+            // Actualizar Visuales en Tiempo Real
+            updateFlowchart();
+            updateECGConfig();
+        }
+
+        function goBack() {
+            if (appState.currentStep === 3) { // Estamos en Relación AV (índice 3)
+                if (appState.tipoQRS === 'narrow') {
+                    goToStep(1); // Volver a morfología QRS (saltando validación sinusal)
+                } else {
+                    goToStep(2); // Volver a validación sinusal
+                }
+            } else if (appState.currentStep === 5) { // Estamos en Confirmación Diagnóstico (índice 5)
+                goToStep(4); // Volver a Selección de Tasa (índice 4)
+            } else if (appState.currentStep === 6) { // Estamos en Resultados (índice 6)
+                if (appState.relacionAV === 'less') {
+                    goToStep(3); // Volver a Relación AV (índice 3)
+                } else {
+                    goToStep(5); // Volver a Confirmación (índice 5)
+                }
+            } else if (appState.currentStep > 0) {
+                goToStep(appState.currentStep - 1);
+            }
+        }
+
+        function resetAll() {
+            appState.tieneDisociacionAV = null;
+            appState.tipoQRS = null;
+            appState.esIdenticoSinusal = null;
+            appState.relacionAV = null;
+            appState.tasaFcPc = 50;
+            appState.diagnosticoFinal = null;
+            appState.currentStep = 0;
+
+            updateUI();
+        }
+
+        // --- 5. DISPARADORES DE SELECCIÓN ---
+        function setDisociacion(val) {
+            appState.tieneDisociacionAV = val;
+            if (val) goToStep(1);
+        }
+
+        // Configuración inicial de la morfología del QRS
+        function setQRS(type) {
+            appState.tipoQRS = type;
+            if (type === 'narrow') {
+                appState.esIdenticoSinusal = null; // No aplica
+                goToStep(3); // Saltar StepSinusal e ir directo a Relación AV (índice 3)
+            } else {
+                goToStep(2); // Ir a Verificación Sinusal (índice 2)
+            }
+        }
+
+        function setIdenticoSinusal(val) {
+            appState.esIdenticoSinusal = val;
+            goToStep(3); // Avanzar a Relación AV (índice 3)
+        }
+
+        function setAVRelation(relation) {
+            appState.relacionAV = relation;
+            if (relation === 'less') {
+                // Si V < A, no requiere Paso de Tasa. Se calcula inmediatamente
+                calculateFinal();
+                goToStep(6); // Ir directo a la página de resultados final
+            } else {
+                goToStep(4); // Ir a Selección de Tasa (índice 4)
+            }
+        }
+
+        // Selección del rango de tasa de forma pura, sin mostrar el diagnóstico
+        function setTasaRange(range) {
+            if (range === 'low') {
+                appState.tasaFcPc = 1;   // Equivalente a < 3%
+            } else if (range === 'mid') {
+                appState.tasaFcPc = 50;  // Equivalente a 3% - 95%
+            } else if (range === 'high') {
+                appState.tasaFcPc = 100; // Equivalente a > 95%
+            }
+            goToStep(5); // Avanzar a la confirmación diagnóstica (Paso 4 / índice 5)
+        }
+
+        // Determina el camino lógico activo según el bloqueo basal sinusal
+        function getEffectivePathway() {
+            if (appState.tipoQRS === 'narrow') return 'narrow';
+            if (appState.tipoQRS === 'wide' && appState.esIdenticoSinusal === true) return 'narrow'; 
+            return 'wide'; 
+        }
+
+        // Obtiene la clave de diagnóstico según los parámetros del estado actual
+        function getSelectedDiagnosticKey() {
+            const path = getEffectivePathway();
+            if (path === 'narrow') {
+                if (appState.relacionAV === 'less') {
+                    return 'BAVC_ESC_NODAL';
+                } else {
+                    if (appState.tasaFcPc < 3) return 'BS_ESC_NODAL';
+                    else if (appState.tasaFcPc >= 3 && appState.tasaFcPc <= 95) return 'RITMO_NODAL_ACE';
+                    else return 'JET';
+                }
+            } else { 
+                if (appState.relacionAV === 'less') {
+                    return 'BAVC_ESC_VENT';
+                } else {
+                    if (appState.tasaFcPc < 3) return 'BS_ESC_VENT';
+                    else if (appState.tasaFcPc >= 3 && appState.tasaFcPc <= 95) return 'RIVA';
+                    else return 'TV';
+                }
+            }
+        }
+
+        // Genera de forma interactiva la descripción de la pantalla de confirmación
+        function updateStep4ConfirmCard() {
+            const diagKey = getSelectedDiagnosticKey();
+            const diag = DIAGNOSTICOS[diagKey];
+            
+            const confirmDiagnosisTitle = document.getElementById('confirmDiagnosisTitle');
+            const confirmDiagnosisDesc = document.getElementById('confirmDiagnosisDesc');
+
+            if (diag) {
+                confirmDiagnosisTitle.innerText = diag.titulo;
+                confirmDiagnosisDesc.innerText = diag.def;
+            }
+        }
+
+        // Avanza al paso final de Resultados confirmando la selección realizada
+        function confirmDiagnosis() {
+            calculateFinal();
+        }
+
+        // --- 6. CÁLCULO LOGICO FINAL DEL ALGORITMO ---
+        function calculateFinal() {
+            const diagKey = getSelectedDiagnosticKey();
+            appState.diagnosticoFinal = diagKey;
+
+            // Renderizar datos en Paso 5 de Resultados (índice 6)
+            const diag = DIAGNOSTICOS[diagKey];
+            document.getElementById('resultName').innerText = diag ? diag.titulo : 'Diagnóstico Indeterminado';
+            
+            let qrsSummaryText = '';
+            if (appState.tipoQRS === 'narrow') {
+                qrsSummaryText = 'Angosto (<120ms)';
+            } else {
+                qrsSummaryText = appState.esIdenticoSinusal ? 'Ancho (Idéntico a Sinusal)' : 'Ancho (Diferente a Sinusal)';
+            }
+            
+            document.getElementById('summaryQRS').innerText = qrsSummaryText;
+            document.getElementById('summaryAV').innerText = appState.relacionAV === 'less' ? 'V < A' : 'V ≥ A';
+            
+            const summaryFcPcContainer = document.getElementById('summaryFcPcContainer');
+            if (appState.relacionAV === 'less') {
+                summaryFcPcContainer.classList.add('opacity-40');
+                document.getElementById('summaryFcPc').innerText = 'N/A';
+            } else {
+                summaryFcPcContainer.classList.remove('opacity-40');
+                let rangeText = '';
+                if (appState.tasaFcPc < 3) rangeText = '< 3%';
+                else if (appState.tasaFcPc >= 3 && appState.tasaFcPc <= 95) rangeText = '3% - 95%';
+                else rangeText = '> 95%';
+                document.getElementById('summaryFcPc').innerText = rangeText;
+            }
+
+            goToStep(6); // Mostrar Resultados (Paso final)
+        }
+
+        // --- 7. MODALES ---
+        function showNoAVModal() {
+            document.getElementById('noAVModal').classList.remove('hidden');
+        }
+
+        function closeNoAVModal() {
+            document.getElementById('noAVModal').classList.add('hidden');
+        }
+
+        function openGuideModal() {
+            const diag = DIAGNOSTICOS[appState.diagnosticoFinal];
+            if (!diag) return;
+
+            document.getElementById('modalDiagnosisTitle').innerText = diag.titulo;
+            document.getElementById('modalDiagnosisDef').innerText = diag.def;
+            document.getElementById('modalDiagnosisAction').innerText = diag.conducta;
+
+            const listContainer = document.getElementById('modalDiagnosisECG');
+            listContainer.innerHTML = '';
+            diag.ecg.forEach(item => {
+                const li = document.createElement('li');
+                li.innerText = item;
+                listContainer.appendChild(li);
+            });
+
+            document.getElementById('guideModal').classList.remove('hidden');
+        }
+
+        function closeGuideModal() {
+            document.getElementById('guideModal').classList.add('hidden');
+        }
+
+        // --- 8. MAPA DE ALGORITMO INTERACTIVO (TRAZABILIDAD) ---
+        function updateFlowchart() {
+            const root = document.getElementById('nodeRoot');
+            const narrow = document.getElementById('nodeNarrow');
+            const wide = document.getElementById('nodeWide');
+            const nLess = document.getElementById('nodeNarrowLess');
+            const nGreater = document.getElementById('nodeNarrowGreater');
+            const wLess = document.getElementById('nodeWideLess');
+            const wGreater = document.getElementById('nodeWideGreater');
+            const termNodal = document.getElementById('terminalNodal');
+            const termVent = document.getElementById('terminalVent');
+
+            // Resetear clases de todos los nodos
+            const allNodes = [root, narrow, wide, nLess, nGreater, wLess, wGreater, termNodal, termVent];
+            allNodes.forEach(n => {
+                n.className = "p-2 text-center rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-400 transition-all duration-300";
+            });
+
+            // Resaltado de camino activo
+            if (appState.currentStep >= 0) {
+                root.className = "p-2 text-center rounded-lg border border-clinical-teal bg-clinical-500 text-white shadow-sm transition-all duration-300";
+            }
+            
+            if (appState.currentStep >= 1 && appState.tipoQRS) {
+                if (appState.tipoQRS === 'narrow') {
+                    narrow.className = "p-2.5 text-center rounded-lg border border-clinical-teal bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 font-bold shadow-sm transition-all duration-300";
+                } else {
+                    wide.className = "p-2.5 text-center rounded-lg border border-clinical-teal bg-clinical-100 dark:bg-clinical-500/20 text-clinical-500 font-bold shadow-sm transition-all duration-300";
+                }
+            }
+
+            const activePath = getEffectivePathway();
+
+            if (appState.currentStep >= 3 && appState.relacionAV) {
+                if (activePath === 'narrow') {
+                    if (appState.relacionAV === 'less') {
+                        nLess.className = "p-2 text-center rounded-md border border-clinical-teal bg-clinical-50 dark:bg-clinical-500/10 text-[10px] text-clinical-500 font-bold transition-all duration-300";
+                        termNodal.className = "p-2 rounded bg-clinical-500 text-white font-bold transition-all duration-300";
+                    } else {
+                        nGreater.className = "p-2 text-center rounded-md border border-clinical-teal bg-clinical-50 dark:bg-clinical-500/10 text-[10px] text-clinical-500 font-bold transition-all duration-300";
+                        termNodal.className = "p-2 rounded bg-clinical-500 text-white font-bold transition-all duration-300";
+                    }
+                } else {
+                    if (appState.relacionAV === 'less') {
+                        wLess.className = "p-2 text-center rounded-md border border-clinical-teal bg-clinical-50 dark:bg-clinical-500/10 text-[10px] text-clinical-500 font-bold transition-all duration-300";
+                        termVent.className = "p-2 rounded bg-clinical-500 text-white font-bold transition-all duration-300";
+                    } else {
+                        wGreater.className = "p-2 text-center rounded-md border border-clinical-teal bg-clinical-50 dark:bg-clinical-500/10 text-[10px] text-clinical-500 font-bold transition-all duration-300";
+                        termVent.className = "p-2 rounded bg-clinical-500 text-white font-bold transition-all duration-300";
+                    }
+                }
+            }
+        }
+
+        // --- 9. SIMULADOR DE ECG (CANVAS) ---
+        let ecgParams = {
+            atrialInterval: 120, // Distancia entre ondas P
+            ventInterval: 180,   // Distancia entre ondas R (variable)
+            qrsType: 'narrow',   // 'narrow' | 'wide'
+            connected: false
+        };
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function updateECGConfig() {
+            const ecgLabel = document.getElementById('ecgLabel');
+            const ventRateLabel = document.getElementById('ventRateLabel');
+
+            if (appState.currentStep === 0) {
+                ecgParams.connected = false;
+                ecgLabel.innerText = "Desconectado";
+                ecgLabel.className = "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400";
+                ventRateLabel.innerText = "Frecuencia Ventricular: -";
+                return;
+            }
+
+            ecgParams.connected = true;
+            ecgParams.qrsType = appState.tipoQRS || 'narrow';
+
+            if (appState.relacionAV === 'less') {
+                ecgParams.ventInterval = 240; // Ventrículo más lento que Aurícula (Escape bradicárdico)
+                ventRateLabel.innerText = "Frecuencia Ventricular: ~35/min (Bradi)";
+            } else if (appState.relacionAV === 'greater_equal') {
+                if (appState.tasaFcPc < 3) {
+                    ecgParams.ventInterval = 220; // Escape lento
+                    ventRateLabel.innerText = "Frecuencia Ventricular: ~40/min";
+                } else if (appState.tasaFcPc >= 3 && appState.tasaFcPc <= 95) {
+                    ecgParams.ventInterval = 140; // Acelerado
+                    ventRateLabel.innerText = "Frecuencia Ventricular: ~65-80/min";
+                } else {
+                    ecgParams.ventInterval = 80;  // Taquicardia
+                    ventRateLabel.innerText = "Frecuencia Ventricular: ~140/min (Taqui)";
+                }
+            } else {
+                ecgParams.ventInterval = 160; // Por defecto
+                ventRateLabel.innerText = "Frecuencia Ventricular: ~55/min";
+            }
+
+            ecgLabel.innerText = "Monitor Activo";
+            ecgLabel.className = "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 animate-pulse";
+        }
+
+        // Simulación matemática de trazado ECG
+        function getECGValue(x) {
+            // Generar onda P (atrial) periódica e independiente
+            let pCycle = x % ecgParams.atrialInterval;
+            let pVal = 0;
+            if (pCycle > 10 && pCycle < 30) {
+                pVal = Math.sin((pCycle - 10) * Math.PI / 20) * 12;
+            }
+
+            // Generar complejo QRS (ventricular) periódico independiente (Disociación)
+            let qrsCycle = x % ecgParams.ventInterval;
+            let qrsVal = 0;
+            if (qrsCycle > 30 && qrsCycle < 80) {
+                let localX = qrsCycle - 30;
+                if (ecgParams.qrsType === 'narrow') {
+                    // Complejo QRS angosto estándar
+                    if (localX < 5) qrsVal = -5; // Onda Q
+                    else if (localX >= 5 && localX < 15) qrsVal = (localX - 5) * 6; // Onda R rápida
+                    else if (localX >= 15 && localX < 25) qrsVal = 60 - (localX - 15) * 8; // Onda S rápida
+                    else if (localX >= 25 && localX < 35) qrsVal = -20 + (localX - 25) * 2; // Recuperación base
+                    else {
+                        pVal = 0; // Evitar que la onda T colisione ruidosamente
+                        qrsVal = Math.sin((localX - 35) * Math.PI / 15) * 10;
+                    }
+                } else {
+                    // Complejo QRS ancho y aberrado (ventricular o aberrancia con bloqueo de rama)
+                    if (localX < 8) qrsVal = -10; 
+                    else if (localX >= 8 && localX < 28) qrsVal = (localX - 8) * 3; // Ascenso más lento
+                    else if (localX >= 28 && localX < 45) qrsVal = 60 - (localX - 28) * 4.5; // Descenso ancho
+                    else {
+                        qrsVal = -Math.sin((localX - 45) * Math.PI / 15) * 18;
+                    }
+                }
+            }
+
+            return pVal + qrsVal;
+        }
+
+        function drawECGGrid() {
+            // Cuadrícula de papel ECG tradicional
+            const gridColor = document.documentElement.classList.contains('dark') ? '#451a22' : '#fde2e4';
+            const subGridColor = document.documentElement.classList.contains('dark') ? '#2e1014' : '#fff0f2';
+
+            ctx.lineWidth = 0.5;
+            // Líneas verticales finas
+            for (let x = 0; x < canvas.width; x += 10) {
+                ctx.strokeStyle = x % 50 === 0 ? gridColor : subGridColor;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            // Líneas horizontales finas
+            for (let y = 0; y < canvas.height; y += 10) {
+                ctx.strokeStyle = y % 50 === 0 ? gridColor : subGridColor;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        function animateECG() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawECGGrid();
+
+            if (ecgParams.connected) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#20b2aa'; // Verde clínico
+                ctx.lineWidth = 2.5;
+                ctx.lineJoin = 'round';
+
+                const centerY = canvas.height / 2;
+
+                for (let i = 0; i < canvas.width; i++) {
+                    const signalX = ecgOffset + i;
+                    const signalY = centerY - getECGValue(signalX);
+                    if (i === 0) {
+                        ctx.moveTo(i, signalY);
+                    } else {
+                        ctx.lineTo(i, signalY);
+                    }
+                }
+                ctx.stroke();
+                ecgOffset += 2; // Velocidad del barrido
+            } else {
+                ctx.beginPath();
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 2;
+                ctx.moveTo(0, canvas.height / 2);
+                ctx.lineTo(canvas.width, canvas.height / 2);
+                ctx.stroke();
+            }
+
+            ecgAnimationId = requestAnimationFrame(animateECG);
+        }
+
+        // Iniciar animación en carga
+        window.onload = function() {
+            updateUI();
+            animateECG();
+        };
+
+    </script>
+</body>
+</html>
