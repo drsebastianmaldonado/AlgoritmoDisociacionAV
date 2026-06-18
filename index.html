@@ -801,7 +801,7 @@
             }
 
             // Preparar botón de interconsulta por WhatsApp con plantilla médica avanzada
-            const msg = `Hola Doctor, vengo desde su aplicación de Disociación VA para hacerle una consulta sobre un caso clínico.\n\n*Sospecha de:* *${diag.titulo}*\n\n*Resumen ECG:* \n- Morfología QRS: ${qrsText}\n- Relación V vs A: ${appState.relacionAV === 'less' ? 'V < A' : 'V >= A'}\n- Tasa Automatismo: ${appState.relacionAV === 'less' ? 'No aplica' : appState.tasaFcPc}`;
+            const msg = `Hola Doctor, vengo desde su aplicación de Disociación VA para hacerle una consulta sobre un caso clínico.`;
             document.getElementById('globalWhatsappShareBtn').href = `https://wa.me/5491131860600?text=${encodeURIComponent(msg)}`;
 
             goToStep('step4');
